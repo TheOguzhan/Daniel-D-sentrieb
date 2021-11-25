@@ -19,7 +19,7 @@
 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
 #define PLATTCHEN_FARBE_FEHLER 30 
 
-#define INFRAROT_WEISS_SCHWELLE 800
+#define INFRAROT_WEISS_SCHWELLE 100
 #define KORRIGIERUNGSRICHTUNG_RECHTS 30
 #define KORRIGIERUNGSRICHTUNG_LINKS 50
 
@@ -90,7 +90,7 @@ void linie_folgen() {
 		//Infrarot-Sensor muss probiert werden
 		//TODO: Resettieren des Infrarots benötigt?
 		float infra = analogRead(INFRAROT_SENSOR);
-		if (infra > INFRAROT_WEISS_SCHWELLE) {
+		if (infra < INFRAROT_WEISS_SCHWELLE) {
 			//Infrarot sieht auch weiß
 			//Da das Infrarot am linken seite liegt, würde es das Linie zuerst "sehen" und wieder schwarz sehen, wenn das Deviation zur rechten Seite wäre
 			//Das Deviation ist deshalb zur linken Seite und das Roboter soll sich zur rechten Seite biegen
