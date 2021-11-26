@@ -8,8 +8,8 @@
 #define MOTOR_LINKS_VORWARTS 7   
 #define MOTOR_RECHTS_VORWARTS 8   
 #define LED_R 9   
-#define LED_G 10   
-#define LED_B 11
+#define LED_B 10   
+#define LED_G 11
 
 //TODO: Diese Werte im echten Leben probieren!
 #define PLATTCHEN_FARBE_FEHLER 110 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
