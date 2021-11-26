@@ -1,5 +1,5 @@
-#include <Wire.h>
-#include <Adafruit_TCS34725.h>
+#include <i2cmaster.h>
+
 #define INFRAROT_SENSOR 0
 #define MOTOR_LINKS_RUCKWARTS 3   
 #define MOTOR_RECHTS_RUCKWARTS 4   
@@ -21,13 +21,32 @@
 #define FARBE_OBERE_SCHWELLE (255-PLATTCHEN_FARBE_FEHLER)
 #define FARBE_UNTERE_SCHWELLE (PLATTCHEN_FARBE_FEHLER)
 
+
+
+void farbesensor_lesen(float *r, float *g, float *b) {
+	i2c_start_wait(0xb4);
+	i2c_write(0x00);
+	i2c_start_wait(0xb5);
+	uint16_t r_raw, g_raw, b_raw, clear_raw;
+	r_raw = i2c_readAck() << 8;
+	r_raw |= i2c_readAck();
+	g_raw = i2c_readAck() << 8;
+	g_raw |= i2c_readAck();
+	b_raw = i2c_readAck() << 8;
+	b_raw |= i2c_readAck();
+	clear_raw = i2c_readAck() << 8;
+	clear_raw |= i2c_readNak();
+    i2c_stop();
+
+	*r = ((float)r_raw / (float)clear_raw) * 255;
+	*g = ((float)g_raw / (float)clear_raw) * 255;
+	*b = ((float)b_raw / (float)clear_raw) * 255;
+}
+
 /*
 Treibt den Motoren mit Richtung-Eingabe
 @param richtung Richtung zwischen -127 (ganz nach links) und 128 (ganz nach rechts) 
 */
-
-Adafruit_TCS34725 farbe_sensor;
-
 void motoren_richten(int richtung) {
 	//TODO: Rausoptimisieren und alle Benutzungen inline machen?
 	richtung += 127;
@@ -37,7 +56,7 @@ void motoren_richten(int richtung) {
 
 void plattchen_behandeln() {
 	float r, g, b; /* Rot, Grün, Blau */
-	farbe_sensor.getRGB(&r, &g, &b);
+	farbesensor_lesen(&r, &g, &b);
 	
 	if (r < FARBE_UNTERE_SCHWELLE && g > FARBE_OBERE_SCHWELLE && b < FARBE_UNTERE_SCHWELLE) {
 		/* Grünes Plättchen, LED soll grün sein */
@@ -58,7 +77,7 @@ void plattchen_behandeln() {
 
 void linie_folgen() {
 	float r, g, b;
-	farbe_sensor.getRGB(&r, &g, &b);
+	farbesensor_lesen(&r, &g, &b);
 	if (r < FARBE_OBERE_SCHWELLE || g < FARBE_OBERE_SCHWELLE || b < FARBE_OBERE_SCHWELLE) {
 		//Farbensensor sieht nicht weiß
 
@@ -98,16 +117,18 @@ void setup() {
 	pinMode(LED_B, OUTPUT);
 	pinMode(INFRAROT_SENSOR, INPUT);
 
+	digitalWrite(LED_R, LOW);
+	digitalWrite(LED_G, LOW);
 	digitalWrite(LED_B, LOW);
-
+	
 	//Motoren orientieren, bei SKS1 nur nach vorne
 	digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
 	digitalWrite(MOTOR_LINKS_VORWARTS, 1);
 	digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
 	digitalWrite(MOTOR_RECHTS_VORWARTS, 1);
 	
-	farbe_sensor.begin();
-	farbe_sensor.setInterrupt(false);
+	i2c_init();
+    delay(1); 
 	
 }
 

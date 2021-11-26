@@ -1,1 +1,2 @@
 https://github.com/PowerBroker2/ArduPID
+https://github.com/landis/arduino/tree/master/libraries/I2cMaster
