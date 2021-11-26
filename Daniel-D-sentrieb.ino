@@ -24,10 +24,10 @@
 
 
 void farbesensor_lesen(float *r, float *g, float *b) {
+	uint16_t r_raw, g_raw, b_raw, clear_raw;
 	i2c_start_wait(0xb4);
 	i2c_write(0x00);
 	i2c_start_wait(0xb5);
-	uint16_t r_raw, g_raw, b_raw, clear_raw;
 	r_raw = i2c_readAck() << 8;
 	r_raw |= i2c_readAck();
 	g_raw = i2c_readAck() << 8;
