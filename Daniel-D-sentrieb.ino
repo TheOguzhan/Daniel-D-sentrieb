@@ -2,20 +2,18 @@
 
 #define INFRAROT_SENSOR 0
 #define MOTOR_LINKS_RUCKWARTS 3   
-#define MOTOR_RECHTS_RUCKWARTS 4   
+#define MOTOR_RECHTS_RUCKWARTS 7   
 #define MOTOR_LINKS_PWM 5   
 #define MOTOR_RECHTS_PWM 6   
-#define MOTOR_LINKS_VORWARTS 7   
+#define MOTOR_LINKS_VORWARTS 4   
 #define MOTOR_RECHTS_VORWARTS 8   
 #define LED_R 9   
 #define LED_B 10   
 #define LED_G 11
-
+#define DEBUG
 //TODO: Diese Werte im echten Leben probieren!
 #define PLATTCHEN_FARBE_FEHLER 110 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
-#define INFRAROT_WEISS_SCHWELLE 100
-#define KORRIGIERUNGSRICHTUNG_RECHTS 30
-#define KORRIGIERUNGSRICHTUNG_LINKS 50
+#define INFRAROT_WEISS_SCHWELLE 400
 /* Automatisch berechnet, nicht direkt geändern! */
 
 #define FARBE_SPEZIFISCH_STELLE 110
@@ -25,7 +23,7 @@
 
 void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 	uint16_t r_raw, g_raw, b_raw, clear_raw, lux_raw;
-
+	
 	i2c_start_wait(0xb4);
 	i2c_write(0x00);
 	i2c_start_wait(0xb5);
@@ -45,10 +43,34 @@ void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 	}
 	
     i2c_stop();
-
-	*r = ((float)r_raw / (float)clear_raw) * 255;
-	*g = ((float)g_raw / (float)clear_raw) * 255;
-	*b = ((float)b_raw / (float)clear_raw) * 255;
+	if (clear_raw) {
+		*r = ((float)r_raw / (float)clear_raw) * 255;
+		*g = ((float)g_raw / (float)clear_raw) * 255;
+		*b = ((float)b_raw / (float)clear_raw) * 255;
+	} else {
+		*r = 0;
+		*g = 0;
+		*b = 0;
+	}
+	
+	#ifdef DEBUG
+	Serial.print("Farbensensor R: ");
+	Serial.print(r_raw);
+	Serial.print(" G: ");
+	Serial.print(g_raw);
+	Serial.print(" B: ");
+	Serial.print(b_raw);
+	Serial.print(" Lux: ");
+	Serial.print(lux_raw);
+	Serial.print(" Clear: ");
+	Serial.println(clear_raw);
+	Serial.print("Normiert R: ");
+	Serial.print(*r);
+	Serial.print(" G: ");
+	Serial.print(*g);
+	Serial.print(" B: ");
+	Serial.println(*b);
+	#endif
 	if (lux) {
 		*lux = lux_raw;
 	}
@@ -62,14 +84,42 @@ bool farbensensor_weiss() {
 }
 
 /*
-Treibt den Motoren mit Richtung-Eingabe
-@param richtung Richtung zwischen -127 (ganz nach links) und 128 (ganz nach rechts) 
+Treibt den Motoren mit PWM-Angaben
+@param links PWM-Wert der linken Motor. Wenn negativ, wird das linke Motor umgekehrt. Werte zwischen -255 und 255.
+@param rechts PWM-Wert der rechten Motor. Wenn negativ, wird das rechte Motor umgekehrt. Werte zwischen -255 und 255.
 */
-void motoren_richten(int richtung) {
-	//TODO: Rausoptimisieren und alle Benutzungen inline machen?
-	richtung += 127;
-	analogWrite(MOTOR_LINKS_PWM, 255 - richtung);
-	analogWrite(MOTOR_RECHTS_PWM, richtung);
+void motoren_treiben(int links, int rechts) {
+	// Linke Motoren treiben
+	if (links < 0) {
+		digitalWrite(MOTOR_LINKS_RUCKWARTS, 1);
+		digitalWrite(MOTOR_LINKS_VORWARTS, 0);
+		analogWrite(MOTOR_LINKS_PWM, -links);
+	} else if (links == 0) {
+		digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
+		digitalWrite(MOTOR_LINKS_VORWARTS, 0);
+		analogWrite(MOTOR_LINKS_PWM, 0);
+	} else {
+		// links > 0
+		digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
+		digitalWrite(MOTOR_LINKS_VORWARTS, 1);
+		analogWrite(MOTOR_LINKS_PWM, links);
+	}
+
+	// Rechte Motoren treiben
+	if (rechts < 0) {
+		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 1);
+		digitalWrite(MOTOR_RECHTS_VORWARTS, 0);
+		analogWrite(MOTOR_RECHTS_PWM, -rechts);
+	} else if (rechts == 0) {
+		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
+		digitalWrite(MOTOR_RECHTS_VORWARTS, 0);
+		analogWrite(MOTOR_RECHTS_PWM, 0);
+	} else {
+		// rechts > 0
+		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
+		digitalWrite(MOTOR_RECHTS_VORWARTS, 1);
+		analogWrite(MOTOR_RECHTS_PWM, rechts);
+	}
 }
 
 void plattchen_behandeln() {
@@ -90,35 +140,36 @@ void plattchen_behandeln() {
 		digitalWrite(LED_R, HIGH);
 		digitalWrite(LED_G, HIGH);
 	}
-
 }
 
 void linie_folgen() {
-	float r, g, b;
-	farbesensor_lesen(&r, &g, &b);
 	if (farbensensor_weiss()) {
 		//Farbensensor sieht weiß
 		//Infrarot-Sensor muss probiert werden
 		//TODO: Resettieren des Infrarots benötigt?
 		float infra = analogRead(INFRAROT_SENSOR);
+		#ifdef DEBUG
+		Serial.print("infra ");
+		Serial.println(infra);
+		#endif
 		if (infra < INFRAROT_WEISS_SCHWELLE) {
 			//Infrarot sieht auch weiß
 			//Da das Infrarot am linken seite liegt, würde es das Linie zuerst "sehen" und wieder schwarz sehen, wenn das Deviation zur rechten Seite wäre
 			//Das Deviation ist deshalb zur linken Seite und das Roboter soll sich zur rechten Seite biegen
 			//TODO: Prüfe, ob das geht!
-			motoren_richten(KORRIGIERUNGSRICHTUNG_RECHTS);
+			motoren_treiben(200, 50);
 			
 		} else {
 			//Infrarot sieht nicht weiß - Linie auf der linken Seite gefunden
 			//Das Roboter soll sich nach links bewegen
-			motoren_richten(KORRIGIERUNGSRICHTUNG_LINKS);
+			motoren_treiben(20, 250);
 		}
 	} else {
 		//Farbensensor sieht nicht weiß
 
 		//Wir sind auf dem Linie, nichts zu tun als vorwärts zu gehen. (?)
 		//TODO: Probiert das echt!
-		motoren_richten(0);
+		motoren_treiben(255, 255);
 	}
 }
 
@@ -140,13 +191,14 @@ void setup() {
 	digitalWrite(LED_B, HIGH);
 	
 	//Motoren orientieren, bei SKS1 nur nach vorne
-	digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
-	digitalWrite(MOTOR_LINKS_VORWARTS, 1);
-	digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
-	digitalWrite(MOTOR_RECHTS_VORWARTS, 1);
-	
+	motoren_treiben(255, 255);
+
 	i2c_init();
     delay(1); 
+
+	#ifdef DEBUG
+	Serial.begin(9600);
+	#endif
 	
 }
 
