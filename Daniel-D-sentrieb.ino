@@ -1,12 +1,12 @@
 #include <i2cmaster.h>
 
-#define INFRAROT_SENSOR 0
-#define MOTOR_LINKS_RUCKWARTS 3   
-#define MOTOR_RECHTS_RUCKWARTS 7   
+#define INFRAROT_SENSOR A0
+#define MOTOR_LINKS_RUCKWARTS 4   
+#define MOTOR_RECHTS_RUCKWARTS 8   
 #define MOTOR_LINKS_PWM 5   
 #define MOTOR_RECHTS_PWM 6   
-#define MOTOR_LINKS_VORWARTS 4   
-#define MOTOR_RECHTS_VORWARTS 8   
+#define MOTOR_LINKS_VORWARTS 3  
+#define MOTOR_RECHTS_VORWARTS 7   
 #define LED_R 11   
 #define LED_B 10   
 #define LED_G 9
@@ -130,11 +130,15 @@ void plattchen_behandeln() {
 		/* Grünes Plättchen, LED soll grün sein */
 		digitalWrite(LED_R, HIGH);
 		digitalWrite(LED_G, LOW);
+		motoren_treiben(0, 0);
+		delay(600);
 		
 	} else if (r > FARBE_SPEZIFISCH_STELLE) {
 		/* Rotes Plättchen, LED soll rot sein */
 		digitalWrite(LED_R, LOW);
 		digitalWrite(LED_G, HIGH);
+		motoren_treiben(0, 0);
+		delay(600);
 	} else {
 		/* Kein Plättchen, LED ausgeschaltet */
 		digitalWrite(LED_R, HIGH);
@@ -142,26 +146,24 @@ void plattchen_behandeln() {
 	}
 }
 
-float *linie_folge_speicher;
+float linie_folge_speicher = 0;
 
 void linie_folgen() {
-	float ans = *linie_folge_speicher;
-	if (digitalRead(A1)) {
-    	if (ans >= 0.0) ans = -0.05;
-    	ans *= 1.05;
+	float ans = linie_folge_speicher;
+	if (analogRead(INFRAROT_SENSOR) > 512) {
+    	if (ans >= 0.00) ans = -0.05;
     	//ans -= 0.05;
-  	}
-  	else {
-    	if (ans < 0.0) ans = 0.05;
-    	ans *= 1.05;
+  	} else {
+    	if (ans < 0.00) ans = 0.05;
     	//ans += 0.05;
   	}
+	ans *= 1.05;
 	if (ans > 1.0) ans = 1.0;
 	if (ans < -1.0) ans = -1.0;
-	*linie_folge_speicher = ans;
+	linie_folge_speicher = ans;
 
-	if (ans <= 0.0) motoren_treiben(128 + (ans * 64), 128);
-    else motoren_treiben(128, 128 - (ans * 64));
+	if (ans <= 0.0) motoren_treiben(128 - abs(ans * 64), 128);
+    else motoren_treiben(128, 128 - abs(ans * 64));
 	
 }
 
