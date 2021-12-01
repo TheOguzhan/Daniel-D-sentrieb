@@ -187,23 +187,22 @@ void plattchen_behandeln() {
 		//Wieder zur Linie-Folge
 		motoren_treiben(255, 255);
 	}
-
 }
 
 void setup() {
-  // put your setup code here, to run once:
-  pinMode(MOTOR_LINKS_RUCKWARTS, OUTPUT);
-  pinMode(MOTOR_RECHTS_RUCKWARTS, OUTPUT);
-  pinMode(MOTOR_LINKS_PWM, OUTPUT);
-  pinMode(MOTOR_RECHTS_PWM, OUTPUT);
-  pinMode(MOTOR_LINKS_VORWARTS, OUTPUT);
-  pinMode(MOTOR_RECHTS_VORWARTS, OUTPUT);
-  pinMode(LED_R, OUTPUT);
-  pinMode(LED_G, OUTPUT);
-  pinMode(LED_B, OUTPUT);
-  pinMode(ELEKTROMAGNET, OUTPUT);
+	// put your setup code here, to run once:
+	pinMode(MOTOR_LINKS_RUCKWARTS, OUTPUT);
+	pinMode(MOTOR_RECHTS_RUCKWARTS, OUTPUT);
+	pinMode(MOTOR_LINKS_PWM, OUTPUT);
+	pinMode(MOTOR_RECHTS_PWM, OUTPUT);
+	pinMode(MOTOR_LINKS_VORWARTS, OUTPUT);
+	pinMode(MOTOR_RECHTS_VORWARTS, OUTPUT);
+	pinMode(LED_R, OUTPUT);
+	pinMode(LED_G, OUTPUT);
+	pinMode(LED_B, OUTPUT);
+	pinMode(ELEKTROMAGNET, OUTPUT);
 
-  i2c_init();
+	i2c_init();
 	delay(1); 
 }
 
