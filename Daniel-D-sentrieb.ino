@@ -18,20 +18,17 @@
 #define ELEKTROMAGNET_ZEIT_MS 750
 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
 #define PLATTCHEN_FARBE_FEHLER 30 
-
 #define INFRAROT_WEISS_SCHWELLE 100
-#define KORRIGIERUNGSRICHTUNG_RECHTS 30
-#define KORRIGIERUNGSRICHTUNG_LINKS 50
+#define FARBE_SPEZIFISCH_STELLE 110
+#define FARBE_WEISS_SCHWELLE 60
+#define WEISS_LUX_SCHWELLE 500
 
-/* Automatisch berechnet, nicht direkt geändern! */
-#define FARBE_OBERE_SCHWELLE (255-PLATTCHEN_FARBE_FEHLER)
-#define FARBE_UNTERE_SCHWELLE (PLATTCHEN_FARBE_FEHLER)
-
-void farbesensor_lesen(float *r, float *g, float *b) {
+void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
+	uint16_t r_raw, g_raw, b_raw, clear_raw, lux_raw;
+	
 	i2c_start_wait(0xb4);
 	i2c_write(0x00);
 	i2c_start_wait(0xb5);
-	uint16_t r_raw, g_raw, b_raw, clear_raw;
 	r_raw = i2c_readAck() << 8;
 	r_raw |= i2c_readAck();
 	g_raw = i2c_readAck() << 8;
@@ -39,86 +36,122 @@ void farbesensor_lesen(float *r, float *g, float *b) {
 	b_raw = i2c_readAck() << 8;
 	b_raw |= i2c_readAck();
 	clear_raw = i2c_readAck() << 8;
-	clear_raw |= i2c_readNak();
+	if (!lux) {
+		clear_raw |= i2c_readNak();
+	} else {
+		clear_raw |= i2c_readAck();
+		lux_raw = i2c_readAck() << 8;
+		lux_raw |= i2c_readNak();
+	}
+	
     i2c_stop();
-
-	*r = ((float)r_raw / (float)clear_raw) * 255;
-	*g = ((float)g_raw / (float)clear_raw) * 255;
-	*b = ((float)b_raw / (float)clear_raw) * 255;
+	if (clear_raw) {
+		*r = ((float)r_raw / (float)clear_raw) * 255;
+		*g = ((float)g_raw / (float)clear_raw) * 255;
+		*b = ((float)b_raw / (float)clear_raw) * 255;
+	} else {
+		*r = 0;
+		*g = 0;
+		*b = 0;
+	}
+	
+	#ifdef DEBUG
+	Serial.print("Farbensensor R: ");
+	Serial.print(r_raw);
+	Serial.print(" G: ");
+	Serial.print(g_raw);
+	Serial.print(" B: ");
+	Serial.print(b_raw);
+	Serial.print(" Lux: ");
+	Serial.print(lux_raw);
+	Serial.print(" Clear: ");
+	Serial.println(clear_raw);
+	Serial.print("Normiert R: ");
+	Serial.print(*r);
+	Serial.print(" G: ");
+	Serial.print(*g);
+	Serial.print(" B: ");
+	Serial.println(*b);
+	#endif
+	if (lux) {
+		*lux = lux_raw;
+	}
 }
-/*!
-@brief Treibt den Motoren mit Richtung-Eingabe
-@param richtung Richtung zwischen -127 (ganz nach links) und 128 (ganz nach rechts) 
+
+bool farbensensor_weiss() {
+	float r, g, b;
+	uint16_t lux;
+	farbesensor_lesen(&r, &g, &b, &lux);
+	return (r > FARBE_WEISS_SCHWELLE && g > FARBE_WEISS_SCHWELLE && b > FARBE_WEISS_SCHWELLE && lux > WEISS_LUX_SCHWELLE);
+}
+
+/*
+Treibt den Motoren mit PWM-Angaben
+@param links PWM-Wert der linken Motor. Wenn negativ, wird das linke Motor umgekehrt. Werte zwischen -255 und 255.
+@param rechts PWM-Wert der rechten Motor. Wenn negativ, wird das rechte Motor umgekehrt. Werte zwischen -255 und 255.
 */
-void motoren_richten(int richtung) {
-  richtung += 127;
-  analogWrite(MOTOR_LINKS_PWM, 255 - richtung); 
-}
-typedef enum MotorOrientierung : int {
-	STOPP = 0,
-	VORNE,
-	RUCKWARTS
-};
-
-void motoren_orientieren(int links, int rechts) {
-	switch (links) {
-		case MotorOrientierung::STOPP:
-			digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
-			digitalWrite(MOTOR_LINKS_VORWARTS, 0);
-		break;
-		case MotorOrientierung::VORNE:
-			digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
-			digitalWrite(MOTOR_LINKS_VORWARTS, 1);
-		break;
-		case MotorOrientierung::RUCKWARTS:
-			digitalWrite(MOTOR_LINKS_RUCKWARTS, 1);
-			digitalWrite(MOTOR_LINKS_VORWARTS, 0);
-		break;
+void motoren_treiben(int links, int rechts) {
+	// Linke Motoren treiben
+	if (links < 0) {
+		digitalWrite(MOTOR_LINKS_RUCKWARTS, 1);
+		digitalWrite(MOTOR_LINKS_VORWARTS, 0);
+		analogWrite(MOTOR_LINKS_PWM, -links);
+	} else if (links == 0) {
+		digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
+		digitalWrite(MOTOR_LINKS_VORWARTS, 0);
+		analogWrite(MOTOR_LINKS_PWM, 0);
+	} else {
+		// links > 0
+		digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
+		digitalWrite(MOTOR_LINKS_VORWARTS, 1);
+		analogWrite(MOTOR_LINKS_PWM, links);
 	}
-	switch (rechts) {
-		case MotorOrientierung::STOPP:
-			digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
-			digitalWrite(MOTOR_RECHTS_VORWARTS, 0);
-		break;
-		case MotorOrientierung::VORNE:
-			digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
-			digitalWrite(MOTOR_RECHTS_VORWARTS, 1);
-		break;
-		case MotorOrientierung::RUCKWARTS:
-			digitalWrite(MOTOR_RECHTS_RUCKWARTS, 1);
-			digitalWrite(MOTOR_RECHTS_VORWARTS, 0);
-		break;
+
+	// Rechte Motoren treiben
+	if (rechts < 0) {
+		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 1);
+		digitalWrite(MOTOR_RECHTS_VORWARTS, 0);
+		analogWrite(MOTOR_RECHTS_PWM, -rechts);
+	} else if (rechts == 0) {
+		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
+		digitalWrite(MOTOR_RECHTS_VORWARTS, 0);
+		analogWrite(MOTOR_RECHTS_PWM, 0);
+	} else {
+		// rechts > 0
+		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
+		digitalWrite(MOTOR_RECHTS_VORWARTS, 1);
+		analogWrite(MOTOR_RECHTS_PWM, rechts);
 	}
 }
-
 
 void linie_folgen() {
-	float r, g, b;
-	motoren_orientieren(VORNE, VORNE);
-	farbesensor_lesen(&r, &g, &b);
-	if (r < FARBE_OBERE_SCHWELLE || g < FARBE_OBERE_SCHWELLE || b < FARBE_OBERE_SCHWELLE) {
-		//Farbensensor sieht nicht weiß
-
-		//Wir sind auf dem Linie, nichts zu tun als vorwärts zu gehen. (?)
-		//TODO: Probiert das echt!
-		motoren_richten(0);
-	} else {
+	if (farbensensor_weiss()) {
 		//Farbensensor sieht weiß
 		//Infrarot-Sensor muss probiert werden
 		//TODO: Resettieren des Infrarots benötigt?
 		float infra = analogRead(INFRAROT_SENSOR);
+		#ifdef DEBUG
+		Serial.print("infra ");
+		Serial.println(infra);
+		#endif
 		if (infra < INFRAROT_WEISS_SCHWELLE) {
 			//Infrarot sieht auch weiß
 			//Da das Infrarot am linken seite liegt, würde es das Linie zuerst "sehen" und wieder schwarz sehen, wenn das Deviation zur rechten Seite wäre
 			//Das Deviation ist deshalb zur linken Seite und das Roboter soll sich zur rechten Seite biegen
 			//TODO: Prüfe, ob das geht!
-			motoren_richten(KORRIGIERUNGSRICHTUNG_RECHTS);
-
+			motoren_treiben(200, 50);
+			
 		} else {
 			//Infrarot sieht nicht weiß - Linie auf der linken Seite gefunden
 			//Das Roboter soll sich nach links bewegen
-			motoren_richten(KORRIGIERUNGSRICHTUNG_LINKS);
+			motoren_treiben(20, 250);
 		}
+	} else {
+		//Farbensensor sieht nicht weiß
+
+		//Wir sind auf dem Linie, nichts zu tun als vorwärts zu gehen. (?)
+		//TODO: Probiert das echt!
+		motoren_treiben(255, 255);
 	}
 }
 
@@ -126,37 +159,33 @@ void plattchen_behandeln() {
 	float r, g, b; /* Rot, Grün, Blau */
 	farbesensor_lesen(&r, &g, &b);
 
-	if (r > FARBE_OBERE_SCHWELLE && g < FARBE_UNTERE_SCHWELLE && b < FARBE_UNTERE_SCHWELLE) {
+	if (r > FARBE_SPEZIFISCH_STELLE) {
 		/* Rotes Plättchen, Plättchen einnehmen und entfernen */
 		digitalWrite(ELEKTROMAGNET, HIGH);
-		//motoren schon nach vorne orientiert; direkt nach vorne gehen, damit wir das Plättchen einfangen können
-		motoren_richten(0);
+		motoren_treiben(255, 255);
 		//warten, bis das Plättchen sicher eingenommen wird
 		//TODO: Probiert das Mechanismus!
 		delay(ELEKTROMAGNET_ZEIT_MS);
 
 		//nach rechts um den rechten Rad biegen
-		motoren_orientieren(VORNE, STOPP);
-		motoren_richten(128);
+		motoren_treiben(255, 0);
 		delay(BIEGEN_ZEIT_MS);
 
 		//hier stoppen und das Plättchen weglassen
-		motoren_orientieren(STOPP, STOPP);
+		motoren_treiben(0, 0);
 		digitalWrite(ELEKTROMAGNET, LOW);
 		delay(ELEKTROMAGNET_ZEIT_MS);
 
 		//wieder nach links um das rechten Rad genau so viel biegen, wie das Roboter früher nach rechts gebogen hat
 		//damit kommen wir zürück auf dem Linie
 		//TODO: probieren, ob das geht!
-		motoren_orientieren(RUCKWARTS, STOPP);
+		motoren_treiben(0, 255);
 		//motoren schon nach rechts orientiert, aber dieses Mal ist das linke Motor rückwärts
 		//da das linke Motor hier auch mit der Höchstgeschwindigkeit, aber nur rückwärts geht, ist kein Änderung der Motortreibung mehr benötigt.
 		delay(BIEGEN_ZEIT_MS);
 
 		//Wieder zur Linie-Folge
-		motoren_orientieren(VORNE, VORNE);
-		//Neutral eingesetzt, damit das Liniefolge-Treiber so einfach wie möglich die Kontrolle zürücknehmen kann
-		motoren_richten(0);
+		motoren_treiben(255, 255);
 	}
 
 }
