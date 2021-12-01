@@ -7,9 +7,9 @@
 #define MOTOR_RECHTS_PWM 6   
 #define MOTOR_LINKS_VORWARTS 4   
 #define MOTOR_RECHTS_VORWARTS 8   
-#define LED_R 9   
+#define LED_R 11   
 #define LED_B 10   
-#define LED_G 11
+#define LED_G 9
 #define DEBUG
 //TODO: Diese Werte im echten Leben probieren!
 #define PLATTCHEN_FARBE_FEHLER 110 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
@@ -142,35 +142,27 @@ void plattchen_behandeln() {
 	}
 }
 
-void linie_folgen() {
-	if (farbensensor_weiss()) {
-		//Farbensensor sieht weiß
-		//Infrarot-Sensor muss probiert werden
-		//TODO: Resettieren des Infrarots benötigt?
-		float infra = analogRead(INFRAROT_SENSOR);
-		#ifdef DEBUG
-		Serial.print("infra ");
-		Serial.println(infra);
-		#endif
-		if (infra < INFRAROT_WEISS_SCHWELLE) {
-			//Infrarot sieht auch weiß
-			//Da das Infrarot am linken seite liegt, würde es das Linie zuerst "sehen" und wieder schwarz sehen, wenn das Deviation zur rechten Seite wäre
-			//Das Deviation ist deshalb zur linken Seite und das Roboter soll sich zur rechten Seite biegen
-			//TODO: Prüfe, ob das geht!
-			motoren_treiben(200, 50);
-			
-		} else {
-			//Infrarot sieht nicht weiß - Linie auf der linken Seite gefunden
-			//Das Roboter soll sich nach links bewegen
-			motoren_treiben(20, 250);
-		}
-	} else {
-		//Farbensensor sieht nicht weiß
+float *linie_folge_speicher;
 
-		//Wir sind auf dem Linie, nichts zu tun als vorwärts zu gehen. (?)
-		//TODO: Probiert das echt!
-		motoren_treiben(255, 255);
-	}
+void linie_folgen() {
+	float ans = *linie_folge_speicher;
+	if (digitalRead(A1)) {
+    	if (ans >= 0.0) ans = -0.05;
+    	ans *= 1.05;
+    	//ans -= 0.05;
+  	}
+  	else {
+    	if (ans < 0.0) ans = 0.05;
+    	ans *= 1.05;
+    	//ans += 0.05;
+  	}
+	if (ans > 1.0) ans = 1.0;
+	if (ans < -1.0) ans = -1.0;
+	*linie_folge_speicher = ans;
+
+	if (ans <= 0.0) motoren_treiben(128 + (ans * 64), 128);
+    else motoren_treiben(128, 128 - (ans * 64));
+	
 }
 
 void setup() {
@@ -191,7 +183,7 @@ void setup() {
 	digitalWrite(LED_B, HIGH);
 	
 	//Motoren orientieren, bei SKS1 nur nach vorne
-	motoren_treiben(255, 255);
+	motoren_treiben(90, 90);
 
 	i2c_init();
     delay(1); 
