@@ -138,7 +138,7 @@ void plattchen_behandeln() {
 	if (r > FARBE_SPEZIFISCH_STELLE) {
 		/* Rotes Plättchen, Plättchen einnehmen und entfernen */
 		digitalWrite(ELEKTROMAGNET, HIGH);
-		motoren_treiben(255, 255);
+		motoren_treiben(20, 20);
 		//warten, bis das Plättchen sicher eingenommen wird
 		//TODO: Probiert das Mechanismus!
 		delay(ELEKTROMAGNET_ZEIT_MS);

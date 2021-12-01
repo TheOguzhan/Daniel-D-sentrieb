@@ -1,5 +1,6 @@
 {
     "sketch": "Daniel-D-sentrieb.ino",
     "configuration": "cpu=atmega328",
-    "board": "arduino:avr:nano"
+    "board": "arduino:avr:nano",
+    "port": "/dev/ttyUSB0"
 }
