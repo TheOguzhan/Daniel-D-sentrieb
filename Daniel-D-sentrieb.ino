@@ -1,4 +1,4 @@
-/* Der URROB ist abhängig von diesem Bibliothek. */
+/* Der URROB ist abhängig von dieser Bibliothek. */
 #include <i2cmaster.h>
 
 /* Die Stecknadeln des URROBs und ihre Aufgaben sind unter.  */
