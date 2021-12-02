@@ -1,16 +1,15 @@
 #include <i2cmaster.h>
 
-#define INFRAROT_SENSOR A0
-#define MOTOR_LINKS_RUCKWARTS 4   
-#define MOTOR_RECHTS_RUCKWARTS 8   
+#define INFRAROT_SENSOR A1
+#define MOTOR_LINKS_RUCKWARTS 3   
+#define MOTOR_RECHTS_RUCKWARTS 7   
 #define MOTOR_LINKS_PWM 5   
 #define MOTOR_RECHTS_PWM 6   
-#define MOTOR_LINKS_VORWARTS 3  
-#define MOTOR_RECHTS_VORWARTS 7   
+#define MOTOR_LINKS_VORWARTS 4  
+#define MOTOR_RECHTS_VORWARTS 8   
 #define LED_R 11   
 #define LED_B 10   
 #define LED_G 9
-#define DEBUG
 //TODO: Diese Werte im echten Leben probieren!
 #define PLATTCHEN_FARBE_FEHLER 110 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
 #define INFRAROT_WEISS_SCHWELLE 400
@@ -20,6 +19,12 @@
 #define FARBE_WEISS_SCHWELLE 60
 #define WEISS_LUX_SCHWELLE 500
 
+#define FARBE_ZEIGEN_ZEIT 600
+#define MOTOREN_STOPP_ZEIT 50
+#define MOTOREN_STOPP_PWM -200
+#define FARBE_ZEIGEN_REFRAKTARZEIT 100
+
+float linie_folge_speicher = 0;
 
 void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 	uint16_t r_raw, g_raw, b_raw, clear_raw, lux_raw;
@@ -121,49 +126,74 @@ void motoren_treiben(int links, int rechts) {
 		analogWrite(MOTOR_RECHTS_PWM, rechts);
 	}
 }
-
+int time_letzte = 0;
 void plattchen_behandeln() {
 	float r, g, b; /* Rot, Grün, Blau */
 	farbesensor_lesen(&r, &g, &b);
-	
+	/*
+	if (millis() - time_letzte < FARBE_ZEIGEN_REFRAKTARZEIT) {
+		//Es ist zu kurz nach dem letzten Anschalten des LEDs gewesen! 
+		digitalWrite(LED_R, HIGH);
+		digitalWrite(LED_G, HIGH);
+		return;
+	}
+	*/
+	bool aktiv = false;
 	if (g > FARBE_SPEZIFISCH_STELLE) {
 		/* Grünes Plättchen, LED soll grün sein */
+		aktiv = true;
 		digitalWrite(LED_R, HIGH);
 		digitalWrite(LED_G, LOW);
-		motoren_treiben(0, 0);
-		delay(600);
+		
 		
 	} else if (r > FARBE_SPEZIFISCH_STELLE) {
 		/* Rotes Plättchen, LED soll rot sein */
+		aktiv = true;
 		digitalWrite(LED_R, LOW);
 		digitalWrite(LED_G, HIGH);
-		motoren_treiben(0, 0);
-		delay(600);
 	} else {
 		/* Kein Plättchen, LED ausgeschaltet */
 		digitalWrite(LED_R, HIGH);
 		digitalWrite(LED_G, HIGH);
 	}
+
+	if (aktiv) {
+		motoren_treiben(-150, -150);
+    	delay(100);
+		motoren_treiben(0, 0);
+		delay(FARBE_ZEIGEN_ZEIT);
+		linie_folge_speicher = 0.1;
+		time_letzte = millis();
+		digitalWrite(LED_R, HIGH);
+		digitalWrite(LED_G, HIGH);
+	}
 }
 
-float linie_folge_speicher = 0;
+
 
 void linie_folgen() {
 	float ans = linie_folge_speicher;
+	Serial.println(analogRead(INFRAROT_SENSOR));
 	if (analogRead(INFRAROT_SENSOR) > 512) {
-    	if (ans >= 0.00) ans = -0.05;
+		Serial.println("Schwarz");
+    	if (ans >= -0.00) ans = -0.07;
     	//ans -= 0.05;
   	} else {
-    	if (ans < 0.00) ans = 0.05;
+		  Serial.println("Weiss");
+    	if (ans <= 0.00) ans = 0.07;
     	//ans += 0.05;
   	}
-	ans *= 1.05;
+	ans *= 1.17;
 	if (ans > 1.0) ans = 1.0;
 	if (ans < -1.0) ans = -1.0;
 	linie_folge_speicher = ans;
-
-	if (ans <= 0.0) motoren_treiben(128 - abs(ans * 64), 128);
-    else motoren_treiben(128, 128 - abs(ans * 64));
+	Serial.print("ans");
+	Serial.println(ans);
+	if (ans <= 0.0) {
+		motoren_treiben(128 - abs(ans * 100), 128);
+	} else {
+		motoren_treiben(128, 128 - abs(ans * 100));
+	}
 	
 }
 
@@ -185,7 +215,7 @@ void setup() {
 	digitalWrite(LED_B, HIGH);
 	
 	//Motoren orientieren, bei SKS1 nur nach vorne
-	motoren_treiben(90, 90);
+	motoren_treiben(128, 128);
 
 	i2c_init();
     delay(1); 
