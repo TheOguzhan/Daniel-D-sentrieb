@@ -10,6 +10,7 @@
 #define LED_R 11   
 #define LED_B 10   
 #define LED_G 9
+
 //TODO: Diese Werte im echten Leben probieren!
 #define PLATTCHEN_FARBE_FEHLER 110 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
 #define INFRAROT_WEISS_SCHWELLE 400
@@ -23,8 +24,14 @@
 #define MOTOREN_STOPP_ZEIT 50
 #define MOTOREN_STOPP_PWM -200
 #define FARBE_ZEIGEN_REFRAKTARZEIT 100
-
+//Zeit in ms pro Umlauf des Liniefolgers unter Normalbedingungen, nach unten für die Normierung benutzt
+#define ZEIT_PRO_PERIODE 12.0
+//Wert zwischen -1 und 1, die vom Liniefolger gespeichert wird, damit wir erinnern, wie weit wir vom Linie entfernt sind
 float linie_folge_speicher = 0;
+//Millisekunden vom Programmanfang seit der letzte Umlauf des Liniefolgers
+int letzte_folge_zeit = 0;
+//Ist es direkt nach einem Plattchenbehandlung, indem das Roboter vollstanden gestoppt und wieder gestartet wurde?
+bool wieder_beginnen = 0;
 
 void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 	uint16_t r_raw, g_raw, b_raw, clear_raw, lux_raw;
@@ -58,34 +65,9 @@ void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 		*b = 0;
 	}
 	
-	#ifdef DEBUG
-	Serial.print("Farbensensor R: ");
-	Serial.print(r_raw);
-	Serial.print(" G: ");
-	Serial.print(g_raw);
-	Serial.print(" B: ");
-	Serial.print(b_raw);
-	Serial.print(" Lux: ");
-	Serial.print(lux_raw);
-	Serial.print(" Clear: ");
-	Serial.println(clear_raw);
-	Serial.print("Normiert R: ");
-	Serial.print(*r);
-	Serial.print(" G: ");
-	Serial.print(*g);
-	Serial.print(" B: ");
-	Serial.println(*b);
-	#endif
 	if (lux) {
 		*lux = lux_raw;
 	}
-}
-
-bool farbensensor_weiss() {
-	float r, g, b;
-	uint16_t lux;
-	farbesensor_lesen(&r, &g, &b, &lux);
-	return (r > FARBE_WEISS_SCHWELLE && g > FARBE_WEISS_SCHWELLE && b > FARBE_WEISS_SCHWELLE && lux > WEISS_LUX_SCHWELLE);
 }
 
 /*
@@ -145,7 +127,6 @@ void plattchen_behandeln() {
 		digitalWrite(LED_R, HIGH);
 		digitalWrite(LED_G, LOW);
 		
-		
 	} else if (r > FARBE_SPEZIFISCH_STELLE) {
 		/* Rotes Plättchen, LED soll rot sein */
 		aktiv = true;
@@ -158,6 +139,7 @@ void plattchen_behandeln() {
 	}
 
 	if (aktiv) {
+		wieder_beginnen = true;
 		motoren_treiben(-150, -150);
     	delay(100);
 		motoren_treiben(0, 0);
@@ -169,30 +151,35 @@ void plattchen_behandeln() {
 	}
 }
 
-
-
 void linie_folgen() {
-	float ans = linie_folge_speicher;
-	Serial.println(analogRead(INFRAROT_SENSOR));
+	int jetzt = millis();
+	int zeit_differenz;
+	if (wieder_beginnen) {
+		//Das Roboter wurde früher gestoppt, das Plättchenbehandlungalgorithmus ist jetzt vom Liniefolgerzustand verantwortlich!
+		zeit_differenz = ZEIT_PRO_PERIODE;
+		wieder_beginnen = false;
+	} else {
+		zeit_differenz = jetzt - letzte_folge_zeit;
+	}
+	letzte_folge_zeit = jetzt;
+	
 	if (analogRead(INFRAROT_SENSOR) > 512) {
-		Serial.println("Schwarz");
-    	if (ans >= -0.00) ans = -0.07;
+    	if (linie_folge_speicher >= -0.00) linie_folge_speicher = -0.07;
     	//ans -= 0.05;
   	} else {
-		  Serial.println("Weiss");
-    	if (ans <= 0.00) ans = 0.07;
+    	if (linie_folge_speicher <= 0.00) linie_folge_speicher = 0.07;
     	//ans += 0.05;
   	}
-	ans *= 1.17;
-	if (ans > 1.0) ans = 1.0;
-	if (ans < -1.0) ans = -1.0;
-	linie_folge_speicher = ans;
-	Serial.print("ans");
-	Serial.println(ans);
-	if (ans <= 0.0) {
-		motoren_treiben(128 - abs(ans * 100), 128);
+	//Normierte Multiplikation durch die Zeitdifferenz, damit ein verlangsamtes Roboter sich nicht ganz anders bewegt. 
+	linie_folge_speicher *= pow(1.17, ((float)zeit_differenz) / ZEIT_PRO_PERIODE);
+
+	if (linie_folge_speicher > 1.0) linie_folge_speicher = 1.0;
+	if (linie_folge_speicher < -1.0) linie_folge_speicher = -1.0;
+	//Motoren richtig treiben
+	if (linie_folge_speicher <= 0.0) {
+		motoren_treiben(128 - abs(linie_folge_speicher * 100), 128);
 	} else {
-		motoren_treiben(128, 128 - abs(ans * 100));
+		motoren_treiben(128, 128 - abs(linie_folge_speicher * 100));
 	}
 	
 }
@@ -219,11 +206,7 @@ void setup() {
 
 	i2c_init();
     delay(1); 
-
-	#ifdef DEBUG
-	Serial.begin(9600);
-	#endif
-	
+		
 }
 
 void loop() {
