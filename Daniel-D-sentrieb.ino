@@ -195,6 +195,7 @@ void setup() {
 	pinMode(LED_G, OUTPUT);
 	pinMode(LED_B, OUTPUT);
 	pinMode(INFRAROT_SENSOR, INPUT);
+	pinMode(ELEKTROMAGNET, OUTPUT);
 
 	digitalWrite(LED_R, HIGH);
 	digitalWrite(LED_G, HIGH);
