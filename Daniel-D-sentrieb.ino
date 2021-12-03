@@ -7,12 +7,11 @@
 #define MOTOR_RECHTS_PWM 6   
 #define MOTOR_LINKS_VORWARTS 3  
 #define MOTOR_RECHTS_VORWARTS 7   
-#define LED_R 11   
+#define LED_R 9   
 #define LED_B 10   
-#define LED_G 9
+#define LED_G 11
 #define ELEKTROMAGNET 12
 
-//TODO: Diese Werte im echten Leben probieren!
 #define PLATTCHEN_FARBE_FEHLER 110 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
 #define INFRAROT_WEISS_SCHWELLE 400
 /* Automatisch berechnet, nicht direkt geändern! */
@@ -23,12 +22,14 @@
 
 #define MOTOREN_STOPP_ZEIT 50
 #define MOTOREN_STOPP_PWM -200
+#define FARBE_ZEIGEN_ZEIT 600
 
 /* Zeit in ms, die das Roboter benötigt, um ein Plättchen zufriedigend weit wegzuschoben */
-#define BIEGEN_ZEIT_MS 1250 
+#define BIEGEN_ZEIT_MS 1100 
 /* Zeit in ms, die das Elektromagnet benötigt, vollständig an- und auszuschalten*/
 #define ELEKTROMAGNET_ZEIT_MS 750
-
+#define ELEKTROMAGNET_FANGEN_ZEIT_MS 500
+#define VORNE_ZEIT_MS 300
 //Zeit in ms pro Umlauf des Liniefolgers unter Normalbedingungen, nach unten für die Normierung benutzt
 #define ZEIT_PRO_PERIODE 12.0
 //Wert zwischen -1 und 1, die vom Liniefolger gespeichert wird, damit wir erinnern, wie weit wir vom Linie entfernt sind
@@ -58,12 +59,15 @@ void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 		lux_raw = i2c_readAck() << 8;
 		lux_raw |= i2c_readNak();
 	}
-	
+
+	//Für SKS2 funktioniert diese Treiber besser
+
+	float roh_dividend = (r_raw + g_raw + b_raw);
     i2c_stop();
 	if (clear_raw) {
-		*r = ((float)r_raw / (float)clear_raw) * 255;
-		*g = ((float)g_raw / (float)clear_raw) * 255;
-		*b = ((float)b_raw / (float)clear_raw) * 255;
+		*r = ((float)r_raw / (float)roh_dividend) * 255;
+		*g = ((float)g_raw / (float)roh_dividend) * 255;
+		*b = ((float)b_raw / (float)roh_dividend) * 255;
 	} else {
 		*r = 0;
 		*g = 0;
@@ -72,6 +76,7 @@ void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 	
 	if (lux) {
 		*lux = lux_raw;
+		
 	}
 }
 
@@ -120,33 +125,53 @@ void plattchen_behandeln() {
 
 	if (r > FARBE_SPEZIFISCH_STELLE) {
 		/* Rotes Plättchen, Plättchen einnehmen und entfernen */
+		digitalWrite(LED_R, LOW);
+		
 		digitalWrite(ELEKTROMAGNET, HIGH);
-		motoren_treiben(0,0);
+		motoren_treiben(-140,-140);
 		//warten, bis das Plättchen sicher eingenommen wird
-		//TODO: Probiert das Mechanismus!
-		delay(ELEKTROMAGNET_ZEIT_MS);
-
+		delay(ELEKTROMAGNET_FANGEN_ZEIT_MS);
 		//nach rechts um den rechten Rad biegen
-		motoren_treiben(255, 0);
+		motoren_treiben(140, 0);
 		delay(BIEGEN_ZEIT_MS);
+
+		//nach vorne gehen, um das Plättchen weiter zu entfernen
+		motoren_treiben(128, 128);
+		delay(VORNE_ZEIT_MS);
 
 		//hier stoppen und das Plättchen weglassen
 		motoren_treiben(0, 0);
 		digitalWrite(ELEKTROMAGNET, LOW);
 		delay(ELEKTROMAGNET_ZEIT_MS);
 
+		//wieder zürück kommen
+		motoren_treiben(-128, -128);
+		delay(VORNE_ZEIT_MS);
+
 		//wieder nach links um das rechten Rad genau so viel biegen, wie das Roboter früher nach rechts gebogen hat
 		//damit kommen wir zürück auf dem Linie
-		//TODO: probieren, ob das geht!
-		motoren_treiben(0, 255);
+		//Das Roboter geht nach links ein bisschen schneller und muss deswegen dazu kompensiert werden
+		motoren_treiben(-130, 0);
 		//motoren schon nach rechts orientiert, aber dieses Mal ist das linke Motor rückwärts
 		//da das linke Motor hier auch mit der Höchstgeschwindigkeit, aber nur rückwärts geht, ist kein Änderung der Motortreibung mehr benötigt.
 		delay(BIEGEN_ZEIT_MS);
 
 		//Wieder zur Linie-Folge
-		motoren_treiben(255, 255);
-
+		motoren_treiben(128, 128);
+		digitalWrite(LED_R, HIGH);
 		wieder_beginnen = true;
+		linie_folge_speicher = -0.1;
+	} else if (g > FARBE_SPEZIFISCH_STELLE) {
+		/* Grünes Plättchen, LED soll grün sein */
+		digitalWrite(LED_G, LOW);
+		motoren_treiben(-150, -150);
+		delay(100);
+		motoren_treiben(0, 0);
+		delay(FARBE_ZEIGEN_ZEIT);
+		digitalWrite(LED_G, HIGH);
+		wieder_beginnen = true;
+		linie_folge_speicher = 0.1;
+
 	}
 }
 
@@ -206,7 +231,6 @@ void setup() {
 
 	i2c_init();
     delay(1); 
-		
 }
 
 void loop() {
