@@ -139,7 +139,7 @@ void plattchen_behandeln()
 
 - ### Wichtige Funktionen
   
-- #### Motor richten
+- #### Motor treiben
   
 ```cpp
 
@@ -242,7 +242,7 @@ void motoren_treiben(int links, int rechts)
 }
 ```
 
-- #### Konstante
+- #### Konstanten und Variablen
 
 ```cpp
 #define INFRAROT_SENSOR A1
@@ -326,14 +326,14 @@ void setup()
 - #### ```void loop()``` Funktion des Kodes
 
 ```cpp
-  void loop()
+void loop()
 {
  linie_folgen();
  plattchen_behandeln();
 }
 ```
 
-## Orderstruktur
+## Ordnerstruktur
 
 ```folder
 ├── .vscode
