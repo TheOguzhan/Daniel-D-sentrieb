@@ -24,15 +24,16 @@
 #define MOTOREN_STOPP_ZEIT 50
 #define MOTOREN_STOPP_PWM -200
 #define FARBE_ZEIGEN_ZEIT 600
-
+#define BIEGEN_FINAL_ZEIT_MS 50
 /* Zeit in ms, die das Roboter benötigt, um ein Plättchen zufriedigend weit wegzuschoben */
-#define BIEGEN_ZEIT_MS 1100 
-#define BIEGEN_FINAL_ZEIT_MS 100
+#define BIEGEN_ZEIT_MS 900 
 #define FARBE_MINIMAL_ZEIT_MS 50
+#define INFRA_MINIMAL_ZEIT_MS 10
 /* Zeit in ms, die das Elektromagnet benötigt, vollständig an- und auszuschalten*/
 #define ELEKTROMAGNET_ZEIT_MS 750
 #define ELEKTROMAGNET_FANGEN_ZEIT_MS 500
-#define VORNE_ZEIT_MS 300
+#define VORNE_ZEIT_MS 700
+#define ZURUCK_ZEIT_MS 500
 #define ANALOG_SCHWELLE 512
 //Zeit in ms pro Umlauf des Liniefolgers unter Normalbedingungen, nach unten für die Normierung benutzt
 #define ZEIT_PRO_PERIODE 12.0
@@ -166,11 +167,11 @@ void plattchen_behandeln()
 			//warten, bis das Plättchen sicher eingenommen wird
 			delay(ELEKTROMAGNET_FANGEN_ZEIT_MS);
 			//nach rechts um den rechten Rad biegen
-			motoren_treiben(140, 0);
+			motoren_treiben(140, -140);
 			delay(BIEGEN_ZEIT_MS);
 
 			//nach vorne gehen, um das Plättchen weiter zu entfernen
-			motoren_treiben(128, 128);
+			motoren_treiben(140, 140);
 			delay(VORNE_ZEIT_MS);
 
 			//hier stoppen und das Plättchen weglassen
@@ -179,25 +180,39 @@ void plattchen_behandeln()
 			delay(ELEKTROMAGNET_ZEIT_MS);
 
 			//wieder zürück kommen
-			motoren_treiben(-128, -128);
-			delay(VORNE_ZEIT_MS);
+			motoren_treiben(-140, -140);
+			delay(ZURUCK_ZEIT_MS);
 
 			//wieder nach links um das rechten Rad genau so viel biegen, wie das Roboter früher nach rechts gebogen hat
 			//damit kommen wir zürück auf dem Linie
 			//Das Roboter geht nach links ein bisschen schneller und muss deswegen dazu kompensiert werden
-			motoren_treiben(-190, 0);
+			motoren_treiben(-140, 140);
+			//Wir warten noch etwas länger, damit wir sicher auf der Linie sind.
 			//motoren schon nach rechts orientiert, aber dieses Mal ist das linke Motor rückwärts
 			//da das linke Motor hier auch mit der Höchstgeschwindigkeit, aber nur rückwärts geht, ist kein Änderung der Motortreibung mehr benötigt.
-			while (analogRead(INFRAROT_SENSOR) < ANALOG_SCHWELLE) {
-				//Warten, bis das Roboter auf die Linie kommt.
+			bool auf_schwarz = false;
+			int zeit_letzte = millis();
+			while (!auf_schwarz) {
+				if (analogRead(INFRAROT_SENSOR) > ANALOG_SCHWELLE) {
+					if (millis() - zeit_letzte > INFRA_MINIMAL_ZEIT_MS) {
+						auf_schwarz = true;
+					}
+				} else {
+					zeit_letzte = millis();
+				}
 			}
-			while (analogRead(INFRAROT_SENSOR) > ANALOG_SCHWELLE) {
-				//Warten, bis das Roboter genau auf der Linie steht.
+			zeit_letzte = millis();
+			while (auf_schwarz) {
+				if (analogRead(INFRAROT_SENSOR) < ANALOG_SCHWELLE) {
+					if (millis() - zeit_letzte > INFRA_MINIMAL_ZEIT_MS) {
+						auf_schwarz = false;
+					}
+				} else {
+					zeit_letzte = millis();
+				}
 			}
 			//Wir warten noch etwas länger, damit wir sicher auf der Linie sind.
 			delay(BIEGEN_FINAL_ZEIT_MS);
-
-			//Wieder zur Linie-Folge
 			motoren_treiben(128, 128);
 			digitalWrite(LED_R, HIGH);
 			wieder_beginnen = true;
@@ -255,7 +270,7 @@ void linie_folgen()
     	//ans += 0.05;
   	}
 	//Normierte Multiplikation durch die Zeitdifferenz, damit ein verlangsamtes Roboter sich nicht ganz anders bewegt. 
-	linie_folge_speicher *= pow(1.17, ((float)zeit_differenz) / ZEIT_PRO_PERIODE);
+	linie_folge_speicher *= pow(1.40, ((float)zeit_differenz) / ZEIT_PRO_PERIODE);
 
 	if (linie_folge_speicher > 1.0)
 		linie_folge_speicher = 1.0;
@@ -264,11 +279,11 @@ void linie_folgen()
 	// Motoren richtig treiben
 	if (linie_folge_speicher <= 0.0)
 	{
-		motoren_treiben(128 - abs(linie_folge_speicher * 100), 128);
+		motoren_treiben(150 - abs(linie_folge_speicher * 100), 150);
 	}
 	else
 	{
-		motoren_treiben(128, 128 - abs(linie_folge_speicher * 100));
+		motoren_treiben(150, 150 - abs(linie_folge_speicher * 100));
 	}
 }
 
