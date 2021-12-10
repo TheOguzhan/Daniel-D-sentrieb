@@ -16,7 +16,8 @@
 #define INFRAROT_WEISS_SCHWELLE 400
 /* Automatisch berechnet, nicht direkt geändern! */
 
-#define FARBE_SPEZIFISCH_STELLE 110
+#define ROT_SCHWELLE 110
+#define GRUN_SCHWELLE 110
 #define FARBE_WEISS_SCHWELLE 60
 #define WEISS_LUX_SCHWELLE 500
 
@@ -26,16 +27,25 @@
 
 /* Zeit in ms, die das Roboter benötigt, um ein Plättchen zufriedigend weit wegzuschoben */
 #define BIEGEN_ZEIT_MS 1100 
+#define BIEGEN_FINAL_ZEIT_MS 100
+#define FARBE_MINIMAL_ZEIT_MS 50
 /* Zeit in ms, die das Elektromagnet benötigt, vollständig an- und auszuschalten*/
 #define ELEKTROMAGNET_ZEIT_MS 750
 #define ELEKTROMAGNET_FANGEN_ZEIT_MS 500
 #define VORNE_ZEIT_MS 300
+#define ANALOG_SCHWELLE 512
 //Zeit in ms pro Umlauf des Liniefolgers unter Normalbedingungen, nach unten für die Normierung benutzt
 #define ZEIT_PRO_PERIODE 12.0
 //Wert zwischen -1 und 1, die vom Liniefolger gespeichert wird, damit wir erinnern, wie weit wir vom Linie entfernt sind
 float linie_folge_speicher = 0;
 //Millisekunden vom Programmanfang seit der letzte Umlauf des Liniefolgers
 int letzte_folge_zeit = 0;
+//Zeitpunkten, in denen wir angefangen haben, die Farben zu sehen.
+int grun_anfang_zeit = 0;
+int rot_anfang_zeit = 0;
+//Ob wir jetzt auf die Farbe sein sollen.
+bool jetzt_grun = false;
+bool jetzt_rot = false;
 //Ist es direkt nach einem Plattchenbehandlung, indem das Roboter vollstanden gestoppt und wieder gestartet wurde?
 bool wieder_beginnen = 0;
 
@@ -123,55 +133,82 @@ void plattchen_behandeln() {
 	float r, g, b; /* Rot, Grün, Blau */
 	farbesensor_lesen(&r, &g, &b);
 
-	if (r > FARBE_SPEZIFISCH_STELLE) {
-		/* Rotes Plättchen, Plättchen einnehmen und entfernen */
-		digitalWrite(LED_R, LOW);
-		
-		digitalWrite(ELEKTROMAGNET, HIGH);
-		motoren_treiben(-140,-140);
-		//warten, bis das Plättchen sicher eingenommen wird
-		delay(ELEKTROMAGNET_FANGEN_ZEIT_MS);
-		//nach rechts um den rechten Rad biegen
-		motoren_treiben(140, 0);
-		delay(BIEGEN_ZEIT_MS);
+	if (r > ROT_SCHWELLE) {
+		if (!jetzt_rot) {
+			jetzt_rot = true;
+			rot_anfang_zeit = millis();
+		}
+		if (millis() - rot_anfang_zeit > FARBE_MINIMAL_ZEIT_MS) {
+			/* Rotes Plättchen, Plättchen einnehmen und entfernen */
+			digitalWrite(LED_R, LOW);
+			
+			digitalWrite(ELEKTROMAGNET, HIGH);
+			motoren_treiben(-140,-140);
+			//warten, bis das Plättchen sicher eingenommen wird
+			delay(ELEKTROMAGNET_FANGEN_ZEIT_MS);
+			//nach rechts um den rechten Rad biegen
+			motoren_treiben(140, 0);
+			delay(BIEGEN_ZEIT_MS);
 
-		//nach vorne gehen, um das Plättchen weiter zu entfernen
-		motoren_treiben(128, 128);
-		delay(VORNE_ZEIT_MS);
+			//nach vorne gehen, um das Plättchen weiter zu entfernen
+			motoren_treiben(128, 128);
+			delay(VORNE_ZEIT_MS);
 
-		//hier stoppen und das Plättchen weglassen
-		motoren_treiben(0, 0);
-		digitalWrite(ELEKTROMAGNET, LOW);
-		delay(ELEKTROMAGNET_ZEIT_MS);
+			//hier stoppen und das Plättchen weglassen
+			motoren_treiben(0, 0);
+			digitalWrite(ELEKTROMAGNET, LOW);
+			delay(ELEKTROMAGNET_ZEIT_MS);
 
-		//wieder zürück kommen
-		motoren_treiben(-128, -128);
-		delay(VORNE_ZEIT_MS);
+			//wieder zürück kommen
+			motoren_treiben(-128, -128);
+			delay(VORNE_ZEIT_MS);
 
-		//wieder nach links um das rechten Rad genau so viel biegen, wie das Roboter früher nach rechts gebogen hat
-		//damit kommen wir zürück auf dem Linie
-		//Das Roboter geht nach links ein bisschen schneller und muss deswegen dazu kompensiert werden
-		motoren_treiben(-130, 0);
-		//motoren schon nach rechts orientiert, aber dieses Mal ist das linke Motor rückwärts
-		//da das linke Motor hier auch mit der Höchstgeschwindigkeit, aber nur rückwärts geht, ist kein Änderung der Motortreibung mehr benötigt.
-		delay(BIEGEN_ZEIT_MS);
+			//wieder nach links um das rechten Rad genau so viel biegen, wie das Roboter früher nach rechts gebogen hat
+			//damit kommen wir zürück auf dem Linie
+			//Das Roboter geht nach links ein bisschen schneller und muss deswegen dazu kompensiert werden
+			motoren_treiben(-190, 0);
+			//motoren schon nach rechts orientiert, aber dieses Mal ist das linke Motor rückwärts
+			//da das linke Motor hier auch mit der Höchstgeschwindigkeit, aber nur rückwärts geht, ist kein Änderung der Motortreibung mehr benötigt.
+			while (analogRead(INFRAROT_SENSOR) < ANALOG_SCHWELLE) {
+				//Warten, bis das Roboter auf die Linie kommt.
+			}
+			while (analogRead(INFRAROT_SENSOR) > ANALOG_SCHWELLE) {
+				//Warten, bis das Roboter genau auf der Linie steht.
+			}
+			//Wir warten noch etwas länger, damit wir sicher auf der Linie sind.
+			delay(BIEGEN_FINAL_ZEIT_MS);
 
-		//Wieder zur Linie-Folge
-		motoren_treiben(128, 128);
-		digitalWrite(LED_R, HIGH);
-		wieder_beginnen = true;
-		linie_folge_speicher = -0.1;
-	} else if (g > FARBE_SPEZIFISCH_STELLE) {
-		/* Grünes Plättchen, LED soll grün sein */
-		digitalWrite(LED_G, LOW);
-		motoren_treiben(-150, -150);
-		delay(100);
-		motoren_treiben(0, 0);
-		delay(FARBE_ZEIGEN_ZEIT);
-		digitalWrite(LED_G, HIGH);
-		wieder_beginnen = true;
-		linie_folge_speicher = 0.1;
+			//Wieder zur Linie-Folge
+			motoren_treiben(128, 128);
+			digitalWrite(LED_R, HIGH);
+			wieder_beginnen = true;
+			linie_folge_speicher = 0.1;
 
+			jetzt_rot = false;
+		}
+	} else {
+		jetzt_rot = false;
+	}
+	if (g > GRUN_SCHWELLE) {
+		if (!jetzt_grun) {
+			jetzt_grun = true;
+			grun_anfang_zeit = millis();
+		}
+		if (millis() - grun_anfang_zeit > FARBE_MINIMAL_ZEIT_MS) {
+			/* Grünes Plättchen, LED soll grün sein */
+			digitalWrite(LED_G, LOW);
+			motoren_treiben(-150, -150);
+			delay(100);
+			motoren_treiben(0, 0);
+			delay(FARBE_ZEIGEN_ZEIT);
+			digitalWrite(LED_G, HIGH);
+			wieder_beginnen = true;
+			linie_folge_speicher = 0.1;
+
+			jetzt_grun = false;
+		}
+	} else {
+		jetzt_grun = false;
 	}
 }
 
@@ -187,7 +224,7 @@ void linie_folgen() {
 	}
 	letzte_folge_zeit = jetzt;
 	
-	if (analogRead(INFRAROT_SENSOR) > 512) {
+	if (analogRead(INFRAROT_SENSOR) > ANALOG_SCHWELLE) {
     	if (linie_folge_speicher >= -0.00) linie_folge_speicher = -0.07;
     	//ans -= 0.05;
   	} else {
