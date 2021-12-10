@@ -16,10 +16,12 @@
 #define INFRAROT_WEISS_SCHWELLE 400
 /* Automatisch berechnet, nicht direkt geändern! */
 
-#define FARBE_SPEZIFISCH_STELLE 110
+#define ROT_SCHWELLE 110
+#define GRUN_SCHWELLE 110
 #define FARBE_WEISS_SCHWELLE 60
 #define WEISS_LUX_SCHWELLE 500
 
+#define FARBE_MINIMAL_ZEIT_MS 50
 #define FARBE_ZEIGEN_ZEIT 600
 #define MOTOREN_STOPP_ZEIT 50
 #define MOTOREN_STOPP_PWM -200
@@ -30,6 +32,12 @@
 float linie_folge_speicher = 0;
 //Millisekunden vom Programmanfang seit der letzte Umlauf des Liniefolgers
 int letzte_folge_zeit = 0;
+//Zeitpunkten, in denen wir angefangen haben, die Farben zu sehen.
+int grun_anfang_zeit = 0;
+int rot_anfang_zeit = 0;
+//Ob wir jetzt auf die Farbe sein sollen.
+bool jetzt_grun = false;
+bool jetzt_rot = false;
 //Ist es direkt nach einem Plattchenbehandlung, indem das Roboter vollstanden gestoppt und wieder gestartet wurde?
 bool wieder_beginnen = 0;
 
@@ -53,12 +61,12 @@ void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 		lux_raw = i2c_readAck() << 8;
 		lux_raw |= i2c_readNak();
 	}
-	
+	float roh_dividend = (r_raw + g_raw + b_raw);
     i2c_stop();
 	if (clear_raw) {
-		*r = ((float)r_raw / (float)clear_raw) * 255;
-		*g = ((float)g_raw / (float)clear_raw) * 255;
-		*b = ((float)b_raw / (float)clear_raw) * 255;
+		*r = ((float)r_raw / (float)roh_dividend) * 255;
+		*g = ((float)g_raw / (float)roh_dividend) * 255;
+		*b = ((float)b_raw / (float)roh_dividend) * 255;
 	} else {
 		*r = 0;
 		*g = 0;
@@ -112,30 +120,36 @@ int time_letzte = 0;
 void plattchen_behandeln() {
 	float r, g, b; /* Rot, Grün, Blau */
 	farbesensor_lesen(&r, &g, &b);
-	/*
-	if (millis() - time_letzte < FARBE_ZEIGEN_REFRAKTARZEIT) {
-		//Es ist zu kurz nach dem letzten Anschalten des LEDs gewesen! 
-		digitalWrite(LED_R, HIGH);
-		digitalWrite(LED_G, HIGH);
-		return;
-	}
-	*/
 	bool aktiv = false;
-	if (g > FARBE_SPEZIFISCH_STELLE) {
-		/* Grünes Plättchen, LED soll grün sein */
-		aktiv = true;
-		digitalWrite(LED_R, HIGH);
-		digitalWrite(LED_G, LOW);
-		
-	} else if (r > FARBE_SPEZIFISCH_STELLE) {
-		/* Rotes Plättchen, LED soll rot sein */
-		aktiv = true;
-		digitalWrite(LED_R, LOW);
-		digitalWrite(LED_G, HIGH);
+	digitalWrite(LED_R, HIGH);
+	digitalWrite(LED_G, HIGH);
+	if (g > GRUN_SCHWELLE) {
+		if (!jetzt_grun) {
+			jetzt_grun = true;
+			grun_anfang_zeit = millis();
+		}
+		if (millis() - grun_anfang_zeit > FARBE_MINIMAL_ZEIT_MS) {
+			/* Grünes Plättchen, LED soll grün sein */
+			aktiv = true;
+			digitalWrite(LED_G, LOW);
+			jetzt_grun = false;
+		}
 	} else {
-		/* Kein Plättchen, LED ausgeschaltet */
-		digitalWrite(LED_R, HIGH);
-		digitalWrite(LED_G, HIGH);
+		jetzt_grun = false;
+	}
+	if (r > ROT_SCHWELLE) {
+		if (!jetzt_rot) {
+			jetzt_rot = true;
+			rot_anfang_zeit = millis();
+		}
+		if (millis() - rot_anfang_zeit > FARBE_MINIMAL_ZEIT_MS) {
+			/* Grünes Plättchen, LED soll grün sein */
+			aktiv = true;
+			digitalWrite(LED_R, LOW);
+			jetzt_rot = false;
+		}
+	} else {
+		jetzt_rot = false;
 	}
 
 	if (aktiv) {
