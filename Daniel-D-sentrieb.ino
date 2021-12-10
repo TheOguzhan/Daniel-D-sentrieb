@@ -1,20 +1,21 @@
+/* Der URROB ist abhängig von dieser Bibliothek. */
 #include <i2cmaster.h>
 
+/* Die Stecknadeln des URROBs und ihre Aufgaben sind unter.  */
+
 #define INFRAROT_SENSOR A1
-#define MOTOR_LINKS_RUCKWARTS 3   
-#define MOTOR_RECHTS_RUCKWARTS 7   
-#define MOTOR_LINKS_PWM 5   
-#define MOTOR_RECHTS_PWM 6   
-#define MOTOR_LINKS_VORWARTS 4  
-#define MOTOR_RECHTS_VORWARTS 8   
-#define LED_R 11   
-#define LED_B 10   
+#define MOTOR_LINKS_RUCKWARTS 3
+#define MOTOR_RECHTS_RUCKWARTS 7
+#define MOTOR_LINKS_PWM 5
+#define MOTOR_RECHTS_PWM 6
+#define MOTOR_LINKS_VORWARTS 4
+#define MOTOR_RECHTS_VORWARTS 8
+#define LED_R 11
+#define LED_B 10
 #define LED_G 9
 
-//TODO: Diese Werte im echten Leben probieren!
 #define PLATTCHEN_FARBE_FEHLER 110 /* Deviation von den erwarteten Farben, die Plättchen besitzen */
 #define INFRAROT_WEISS_SCHWELLE 400
-/* Automatisch berechnet, nicht direkt geändern! */
 
 #define ROT_SCHWELLE 110
 #define GRUN_SCHWELLE 110
@@ -26,11 +27,17 @@
 #define MOTOREN_STOPP_ZEIT 50
 #define MOTOREN_STOPP_PWM -200
 #define FARBE_ZEIGEN_REFRAKTARZEIT 100
-//Zeit in ms pro Umlauf des Liniefolgers unter Normalbedingungen, nach unten für die Normierung benutzt
+
+/* Zeit in ms pro Umlauf des Liniefolgers unter Normalbedingungen, nach unten für die Normierung benutzt */
+
 #define ZEIT_PRO_PERIODE 12.0
-//Wert zwischen -1 und 1, die vom Liniefolger gespeichert wird, damit wir erinnern, wie weit wir vom Linie entfernt sind
+
+/* Wert zwischen -1 und 1, die vom Liniefolger gespeichert wird, damit wir erinnern, wie weit wir vom Linie entfernt sind */
+
 float linie_folge_speicher = 0;
-//Millisekunden vom Programmanfang seit der letzte Umlauf des Liniefolgers
+
+/* Millisekunden vom Programmanfang seit der letzte Umlauf des Liniefolgers */
+
 int letzte_folge_zeit = 0;
 //Zeitpunkten, in denen wir angefangen haben, die Farben zu sehen.
 int grun_anfang_zeit = 0;
@@ -41,9 +48,10 @@ bool jetzt_rot = false;
 //Ist es direkt nach einem Plattchenbehandlung, indem das Roboter vollstanden gestoppt und wieder gestartet wurde?
 bool wieder_beginnen = 0;
 
-void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
+void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux = NULL)
+{
 	uint16_t r_raw, g_raw, b_raw, clear_raw, lux_raw;
-	
+
 	i2c_start_wait(0xb4);
 	i2c_write(0x00);
 	i2c_start_wait(0xb5);
@@ -54,9 +62,12 @@ void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 	b_raw = i2c_readAck() << 8;
 	b_raw |= i2c_readAck();
 	clear_raw = i2c_readAck() << 8;
-	if (!lux) {
+	if (!lux)
+	{
 		clear_raw |= i2c_readNak();
-	} else {
+	}
+	else
+	{
 		clear_raw |= i2c_readAck();
 		lux_raw = i2c_readAck() << 8;
 		lux_raw |= i2c_readNak();
@@ -72,8 +83,9 @@ void farbesensor_lesen(float *r, float *g, float *b, uint16_t *lux=NULL) {
 		*g = 0;
 		*b = 0;
 	}
-	
-	if (lux) {
+
+	if (lux)
+	{
 		*lux = lux_raw;
 	}
 }
@@ -83,17 +95,23 @@ Treibt den Motoren mit PWM-Angaben
 @param links PWM-Wert der linken Motor. Wenn negativ, wird das linke Motor umgekehrt. Werte zwischen -255 und 255.
 @param rechts PWM-Wert der rechten Motor. Wenn negativ, wird das rechte Motor umgekehrt. Werte zwischen -255 und 255.
 */
-void motoren_treiben(int links, int rechts) {
+void motoren_treiben(int links, int rechts)
+{
 	// Linke Motoren treiben
-	if (links < 0) {
+	if (links < 0)
+	{
 		digitalWrite(MOTOR_LINKS_RUCKWARTS, 1);
 		digitalWrite(MOTOR_LINKS_VORWARTS, 0);
 		analogWrite(MOTOR_LINKS_PWM, -links);
-	} else if (links == 0) {
+	}
+	else if (links == 0)
+	{
 		digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
 		digitalWrite(MOTOR_LINKS_VORWARTS, 0);
 		analogWrite(MOTOR_LINKS_PWM, 0);
-	} else {
+	}
+	else
+	{
 		// links > 0
 		digitalWrite(MOTOR_LINKS_RUCKWARTS, 0);
 		digitalWrite(MOTOR_LINKS_VORWARTS, 1);
@@ -101,23 +119,29 @@ void motoren_treiben(int links, int rechts) {
 	}
 
 	// Rechte Motoren treiben
-	if (rechts < 0) {
+	if (rechts < 0)
+	{
 		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 1);
 		digitalWrite(MOTOR_RECHTS_VORWARTS, 0);
 		analogWrite(MOTOR_RECHTS_PWM, -rechts);
-	} else if (rechts == 0) {
+	}
+	else if (rechts == 0)
+	{
 		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
 		digitalWrite(MOTOR_RECHTS_VORWARTS, 0);
 		analogWrite(MOTOR_RECHTS_PWM, 0);
-	} else {
+	}
+	else
+	{
 		// rechts > 0
 		digitalWrite(MOTOR_RECHTS_RUCKWARTS, 0);
 		digitalWrite(MOTOR_RECHTS_VORWARTS, 1);
 		analogWrite(MOTOR_RECHTS_PWM, rechts);
 	}
 }
-int time_letzte = 0;
-void plattchen_behandeln() {
+
+void plattchen_behandeln()
+{
 	float r, g, b; /* Rot, Grün, Blau */
 	farbesensor_lesen(&r, &g, &b);
 	bool aktiv = false;
@@ -152,54 +176,65 @@ void plattchen_behandeln() {
 		jetzt_rot = false;
 	}
 
-	if (aktiv) {
+	if (aktiv)
+	{
 		wieder_beginnen = true;
 		motoren_treiben(-150, -150);
-    	delay(100);
+		delay(100);
 		motoren_treiben(0, 0);
 		delay(FARBE_ZEIGEN_ZEIT);
 		linie_folge_speicher = 0.1;
-		time_letzte = millis();
 		digitalWrite(LED_R, HIGH);
 		digitalWrite(LED_G, HIGH);
 	}
 }
 
-void linie_folgen() {
+void linie_folgen()
+{
 	int jetzt = millis();
 	int zeit_differenz;
-	if (wieder_beginnen) {
-		//Das Roboter wurde früher gestoppt, das Plättchenbehandlungalgorithmus ist jetzt vom Liniefolgerzustand verantwortlich!
+	if (wieder_beginnen)
+	{
+		/* Das Roboter wurde früher gestoppt, das Plättchenbehandlungalgorithmus ist jetzt vom Liniefolgerzustand verantwortlich! */
 		zeit_differenz = ZEIT_PRO_PERIODE;
 		wieder_beginnen = false;
-	} else {
+	}
+	else
+	{
 		zeit_differenz = jetzt - letzte_folge_zeit;
 	}
 	letzte_folge_zeit = jetzt;
-	
-	if (analogRead(INFRAROT_SENSOR) > 512) {
-    	if (linie_folge_speicher >= -0.00) linie_folge_speicher = -0.07;
-    	//ans -= 0.05;
-  	} else {
-    	if (linie_folge_speicher <= 0.00) linie_folge_speicher = 0.07;
-    	//ans += 0.05;
-  	}
-	//Normierte Multiplikation durch die Zeitdifferenz, damit ein verlangsamtes Roboter sich nicht ganz anders bewegt. 
+
+	if (analogRead(INFRAROT_SENSOR) > 512)
+	{
+		if (linie_folge_speicher >= -0.00)
+			linie_folge_speicher = -0.07;
+	}
+	else
+	{
+		if (linie_folge_speicher <= 0.00)
+			linie_folge_speicher = 0.07;
+	}
+	/* Normierte Multiplikation durch die Zeitdifferenz, damit ein verlangsamtes Roboter sich nicht ganz anders bewegt. */
 	linie_folge_speicher *= pow(1.17, ((float)zeit_differenz) / ZEIT_PRO_PERIODE);
 
-	if (linie_folge_speicher > 1.0) linie_folge_speicher = 1.0;
-	if (linie_folge_speicher < -1.0) linie_folge_speicher = -1.0;
-	//Motoren richtig treiben
-	if (linie_folge_speicher <= 0.0) {
+	if (linie_folge_speicher > 1.0)
+		linie_folge_speicher = 1.0;
+	if (linie_folge_speicher < -1.0)
+		linie_folge_speicher = -1.0;
+	/* Motoren richtig treiben */
+	if (linie_folge_speicher <= 0.0)
+	{
 		motoren_treiben(128 - abs(linie_folge_speicher * 100), 128);
-	} else {
+	}
+	else
+	{
 		motoren_treiben(128, 128 - abs(linie_folge_speicher * 100));
 	}
-	
 }
 
-void setup() {
-	// put your setup code here, to run once:
+void setup()
+{
 	pinMode(MOTOR_LINKS_RUCKWARTS, OUTPUT);
 	pinMode(MOTOR_RECHTS_RUCKWARTS, OUTPUT);
 	pinMode(MOTOR_LINKS_PWM, OUTPUT);
@@ -214,17 +249,16 @@ void setup() {
 	digitalWrite(LED_R, HIGH);
 	digitalWrite(LED_G, HIGH);
 	digitalWrite(LED_B, HIGH);
-	
-	//Motoren orientieren, bei SKS1 nur nach vorne
+
+	/* Motoren orientieren, bei SKS1 nur nach vorne */
 	motoren_treiben(128, 128);
 
 	i2c_init();
-    delay(1); 
-		
+	delay(1);
 }
 
-void loop() {
-	// put your main code here, to run repeatedly:
+void loop()
+{
 	linie_folgen();
 	plattchen_behandeln();
 }
