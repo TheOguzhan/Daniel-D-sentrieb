@@ -66,10 +66,8 @@ void linie_folgen()
  
  if (analogRead(INFRAROT_SENSOR) > ANALOG_SCHWELLE) {
      if (linie_folge_speicher >= -0.00) linie_folge_speicher = -0.07;
-     //ans -= 0.05;
    } else {
      if (linie_folge_speicher <= 0.00) linie_folge_speicher = 0.07;
-     //ans += 0.05;
    }
  //Normierte Multiplikation durch die Zeitdifferenz, damit ein verlangsamtes Roboter sich nicht ganz anders bewegt. 
  linie_folge_speicher *= pow(1.30, ((float)zeit_differenz) / ZEIT_PRO_PERIODE);
@@ -412,6 +410,23 @@ void loop()
 
 ```
 
+## Veränderte Coden
+
+> In den Konstanten und Variablen Teilen
+
+- BIEGEN_ZEIT_MS, ELEKTROMAGNET_FANGEN_ZEIT_MS, VORNE_ZEIT_MS, ZURUCK_ZEIT_MS
+- Grund:
+
+  - Um die Plättchen besser und stabiliere zu behandeln.
+
+> In der Funktion ```void plattchen_behandeln()```
+
+- Manche Variablen für Motortreibung und Verzögerungen in ```void plattchen_behandeln()```
+
+- Grund:
+
+  - Um die Plättchen besser und stabiliere zu behandeln.
+  
 ## Ordnerstruktur
 
 ```folder
@@ -720,10 +735,8 @@ void linie_folgen()
  
  if (analogRead(INFRAROT_SENSOR) > ANALOG_SCHWELLE) {
      if (linie_folge_speicher >= -0.00) linie_folge_speicher = -0.07;
-     //ans -= 0.05;
    } else {
      if (linie_folge_speicher <= 0.00) linie_folge_speicher = 0.07;
-     //ans += 0.05;
    }
  //Normierte Multiplikation durch die Zeitdifferenz, damit ein verlangsamtes Roboter sich nicht ganz anders bewegt. 
  linie_folge_speicher *= pow(1.30, ((float)zeit_differenz) / ZEIT_PRO_PERIODE);
